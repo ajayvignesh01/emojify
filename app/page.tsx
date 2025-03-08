@@ -2,7 +2,7 @@ import { Prompt } from '@/components/prompt'
 
 export default function Home() {
   return (
-    <div className='flex h-full flex-col items-center justify-center'>
+    <div className='flex min-h-screen flex-col items-center justify-center'>
       <Prompt />
     </div>
   )
