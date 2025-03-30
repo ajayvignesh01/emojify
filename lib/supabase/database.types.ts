@@ -10,7 +10,9 @@ export type Database = {
           id: string
           image: string | null
           output: string | null
+          progress: number | null
           prompt: string | null
+          success: boolean | null
           user_id: string | null
         }
         Insert: {
@@ -18,7 +20,9 @@ export type Database = {
           id: string
           image?: string | null
           output?: string | null
+          progress?: number | null
           prompt?: string | null
+          success?: boolean | null
           user_id?: string | null
         }
         Update: {
@@ -26,7 +30,9 @@ export type Database = {
           id?: string
           image?: string | null
           output?: string | null
+          progress?: number | null
           prompt?: string | null
+          success?: boolean | null
           user_id?: string | null
         }
         Relationships: []
@@ -112,9 +118,9 @@ export type Database = {
           input: Json
           model: string
           predict_time: number | null
+          progress: number | null
           started_at: string | null
           status: string
-          total_time: number | null
           version: string
         }
         Insert: {
@@ -126,9 +132,9 @@ export type Database = {
           input: Json
           model: string
           predict_time?: number | null
+          progress?: number | null
           started_at?: string | null
           status: string
-          total_time?: number | null
           version: string
         }
         Update: {
@@ -140,9 +146,9 @@ export type Database = {
           input?: Json
           model?: string
           predict_time?: number | null
+          progress?: number | null
           started_at?: string | null
           status?: string
-          total_time?: number | null
           version?: string
         }
         Relationships: [

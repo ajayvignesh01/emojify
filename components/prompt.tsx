@@ -63,7 +63,7 @@ export function Prompt() {
       // If the input is empty, show a warning message
       else if (e.currentTarget.value.trim().length === 0) {
         setMessage({
-          message: `Please enter a prompt ${Math.random()}`,
+          message: `Please enter a prompt`,
           type: 'warning',
           disabled: false,
           clearOnInput: true,

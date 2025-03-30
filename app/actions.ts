@@ -8,6 +8,7 @@ import { Redis } from '@upstash/redis'
 import { formatDistanceToNow } from 'date-fns'
 import { nanoid } from 'nanoid'
 import { headers } from 'next/headers'
+import { redirect } from 'next/navigation'
 import { after } from 'next/server'
 import OpenAI from 'openai'
 import Replicate from 'replicate'
@@ -23,7 +24,7 @@ type GenEmojiData = {
 // Create a new ratelimiter
 const ratelimit = new Ratelimit({
   redis: Redis.fromEnv(),
-  limiter: Ratelimit.slidingWindow(10, '1 d'),
+  limiter: Ratelimit.slidingWindow(100, '1 d'),
   prefix: '@upstash/ratelimit',
   analytics: true
 })
@@ -90,14 +91,15 @@ export async function genEmoji(prompt: string): Promise<GenEmojiData | undefined
   const prediction = await replicate.predictions.create({
     version: process.env.REPLICATE_TEXT_TO_EMOJI_VERSION!,
     input: {
-      prompt: `A TOK emoji of ${prompt}`,
-      apply_watermark: false
+      prompt: `A TOK emoji of a ${prompt}`,
+      num_inference_steps: 30,
+      apply_watermark: false,
+      disable_safety_checker: true
     },
     webhook: getURL(`/api/webhooks/replicate/${generationInsert.id}`, true),
     webhook_events_filter: ['start', 'logs', 'completed']
   })
-
-  console.log('prediction trigger', prediction)
+  // console.log('prediction trigger', prediction)
 
   const replicateInsert: TablesInsert<'replicates'> = {
     id: prediction.id,
@@ -112,4 +114,6 @@ export async function genEmoji(prompt: string): Promise<GenEmojiData | undefined
   await supabase.from('generations').insert(generationInsert)
   await supabase.from('moderations').insert(moderationInsert)
   await supabase.from('replicates').insert(replicateInsert)
+
+  redirect(`/g/${generationInsert.id}`)
 }

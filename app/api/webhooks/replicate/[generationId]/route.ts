@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getModel, getPredictionProgress } from '@/lib/utils'
 import { headers } from 'next/headers'
-import { Prediction } from 'replicate'
+import Replicate, { Prediction } from 'replicate'
 
 export async function POST(
   req: Request,
@@ -66,6 +67,15 @@ export async function POST(
         .from('replicates')
         .update({ status: prediction.status, started_at: prediction.started_at })
         .eq('id', prediction.id)
+
+      const progress = getPredictionProgress(prediction.logs || '')
+      if (progress) {
+        await supabase
+          .from('generations')
+          .update({ progress })
+          .eq('id', generationId)
+          .or(`progress.is.null,progress.lt.${progress}`)
+      }
       break
     case 'canceled':
       // console.log('Canceled prediction:', prediction)
@@ -77,6 +87,8 @@ export async function POST(
           predict_time: prediction.metrics?.predict_time
         })
         .eq('id', prediction.id)
+
+      await supabase.from('generations').update({ success: false }).eq('id', generationId)
       break
     case 'failed':
       // console.log('Failed prediction:', prediction)
@@ -89,6 +101,8 @@ export async function POST(
           predict_time: prediction.metrics?.predict_time
         })
         .eq('id', prediction.id)
+
+      await supabase.from('generations').update({ success: false }).eq('id', generationId)
       break
     case 'succeeded':
       // console.log('Succeeded prediction:', prediction)
@@ -100,10 +114,49 @@ export async function POST(
           predict_time: prediction.metrics?.predict_time
         })
         .eq('id', prediction.id)
-      await supabase
+
+      let outputBlob: Blob
+      try {
+        // Run the background remover model
+        const replicate = new Replicate()
+        const output = await replicate.run(
+          `${process.env.REPLICATE_BACKGROUND_REMOVAL_USER}/${process.env.REPLICATE_BACKGROUND_REMOVAL_MODEL}:${process.env.REPLICATE_BACKGROUND_REMOVAL_VERSION}`,
+          {
+            input: {
+              image: prediction.output[0]
+            }
+          }
+        )
+        const response = new Response(output as BodyInit, {
+          headers: {
+            'Content-Type': 'image/png'
+          }
+        })
+        outputBlob = await response.blob()
+      } catch (e) {
+        // If the background removal fails, use the original output
+        outputBlob = await fetch(prediction.output[0]).then((res) => res.blob())
+      }
+
+      // Upload the output to Supabase Storage
+      const { data: storageData, error: storageError } = await supabase.storage
         .from('generations')
-        .update({ output: prediction.output[0] })
-        .eq('id', generationId)
+        .upload(`/${getModel(prediction.model)}/${generationId}`, outputBlob, {
+          contentType: outputBlob.type,
+          cacheControl: '3600',
+          upsert: true,
+          metadata: { generation_id: generationId, replicate_id: prediction.id }
+        })
+
+      if (storageError) {
+        await supabase.from('generations').update({ success: false }).eq('id', generationId)
+      } else {
+        const url = `${process.env.SUPABASE_URL}/storage/v1/object/public/${storageData?.fullPath}`
+        await supabase
+          .from('generations')
+          .update({ success: true, output: url })
+          .eq('id', generationId)
+      }
       break
     default:
     // console.log('Unhandled prediction:', prediction)
